@@ -1,0 +1,15 @@
+package com.schooltracker.repository;
+
+import com.schooltracker.model.Subject;
+import com.schooltracker.model.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface SubjectRepository extends JpaRepository<Subject, Long> {
+    List<Subject> findByFaculty(User faculty);
+
+    List<Subject> findByStudentsContains(User student);
+}
