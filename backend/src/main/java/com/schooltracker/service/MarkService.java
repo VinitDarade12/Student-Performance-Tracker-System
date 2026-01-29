@@ -145,7 +145,7 @@ public class MarkService {
                 messageBody += "Your performance is consistent. Try to push for an improvement in the next assessment!\n";
             }
 
-            messageBody += "\nBest Regards,\nSchool Tracker System";
+            messageBody += "\nBest Regards,\nStudent Performance Tracker System";
 
             // Send to Student
             if (student.getEmail() != null && !student.getEmail().isEmpty()) {
