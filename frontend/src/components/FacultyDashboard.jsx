@@ -8,13 +8,17 @@ import {
     GraduationCap,
     LogOut,
     Search,
-    Filter
+    Filter,
+    Upload,
+    FileText,
+    Download
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import './FacultyDashboard.css';
 
 const FacultyDashboard = () => {
     const navigate = useNavigate();
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8085';
     const [activeTab, setActiveTab] = useState('subjects');
     const [subjects, setSubjects] = useState([]);
     const [assessments, setAssessments] = useState([]);
@@ -30,6 +34,8 @@ const FacultyDashboard = () => {
     const [selectedAssessment, setSelectedAssessment] = useState(null);
     const [students, setStudents] = useState([]);
     const [studentMarks, setStudentMarks] = useState({}); // { studentId: marks }
+    const [uploadFile, setUploadFile] = useState(null);
+    const [uploading, setUploading] = useState(false);
 
     // Form states
     const [newAssessment, setNewAssessment] = useState({
@@ -51,7 +57,7 @@ const FacultyDashboard = () => {
 
     const fetchStudents = async () => {
         try {
-            const response = await fetch('http://localhost:8085/api/users/role/Student');
+            const response = await fetch(`${baseUrl}/api/users/role/Student`);
             if (response.ok) {
                 const data = await response.json();
                 setStudents(data);
@@ -65,7 +71,7 @@ const FacultyDashboard = () => {
         setSelectedAssessment(assessment);
         // Reuse fetchEnrolledStudents logic but set 'students' state for the marks table
         try {
-            const response = await fetch(`http://localhost:8085/api/subjects/${assessment.subject.id}/students`);
+            const response = await fetch(`${baseUrl}/api/subjects/${assessment.subject.id}/students`);
             if (response.ok) {
                 const data = await response.json();
                 setStudents(data);
@@ -100,7 +106,7 @@ const FacultyDashboard = () => {
         if (!marksValue) return;
 
         try {
-            const response = await fetch('http://localhost:8085/api/marks', {
+            const response = await fetch(`${baseUrl}/api/marks`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -125,7 +131,7 @@ const FacultyDashboard = () => {
 
     const fetchSubjects = async (facultyId) => {
         try {
-            const response = await fetch(`http://localhost:8085/api/subjects/faculty/${facultyId}`);
+            const response = await fetch(`${baseUrl}/api/subjects/faculty/${facultyId}`);
             if (response.ok) {
                 const data = await response.json();
                 setSubjects(data);
@@ -139,7 +145,7 @@ const FacultyDashboard = () => {
 
     const fetchAssessments = async (facultyId) => {
         try {
-            const response = await fetch(`http://localhost:8085/api/assessments/faculty/${facultyId}`);
+            const response = await fetch(`${baseUrl}/api/assessments/faculty/${facultyId}`);
             if (response.ok) {
                 const data = await response.json();
                 setAssessments(data);
@@ -149,10 +155,63 @@ const FacultyDashboard = () => {
         }
     };
 
+    const handleFileChange = (e) => {
+        setUploadFile(e.target.files[0]);
+    };
+
+    const handleBulkUpload = async () => {
+        if (!uploadFile || !selectedAssessment) return;
+
+        setUploading(true);
+        const formData = new FormData();
+        formData.append('file', uploadFile);
+        formData.append('assessmentId', selectedAssessment.id);
+        formData.append('subjectId', selectedAssessment.subject.id);
+
+        try {
+            const response = await fetch(`${baseUrl}/api/marks/bulk-upload`, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                let message = `Bulk Upload Complete!\nSuccess: ${result.successCount}\nFailures: ${result.failureCount}`;
+                if (result.errors && result.errors.length > 0) {
+                    message += `\n\nErrors:\n${result.errors.join('\n')}`;
+                }
+                alert(message);
+                setUploadFile(null);
+                // Refresh marks or view
+                handleEnterMarksClick(selectedAssessment);
+            } else {
+                const errorData = await response.json();
+                alert(`Upload failed: ${errorData.message}`);
+            }
+        } catch (error) {
+            console.error('Error in bulk upload:', error);
+            alert('An error occurred during upload.');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const downloadTemplate = () => {
+        const csvContent = "username,obtainedMarks\nstudent1,85\nstudent2,90";
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'marks_template.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    };
+
     const fetchEnrolledStudents = async (subjectId) => {
         setLoadingStudents(true);
         try {
-            const response = await fetch(`http://localhost:8085/api/subjects/${subjectId}/students`);
+            const response = await fetch(`${baseUrl}/api/subjects/${subjectId}/students`);
             if (response.ok) {
                 const data = await response.json();
                 setEnrolledStudents(data);
@@ -172,7 +231,7 @@ const FacultyDashboard = () => {
     const handleCreateAssessment = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch('http://localhost:8085/api/assessments', {
+            const response = await fetch(`${baseUrl}/api/assessments`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -212,7 +271,7 @@ const FacultyDashboard = () => {
     const fetchFacultyPerformanceData = async (facultyId) => {
         setReportLoading(true);
         try {
-            const response = await fetch(`http://localhost:8085/api/marks/faculty/${facultyId}`);
+            const response = await fetch(`${baseUrl}/api/marks/faculty/${facultyId}`);
             if (response.ok) {
                 const data = await response.json();
                 setPerformanceData(data);
@@ -567,52 +626,83 @@ const FacultyDashboard = () => {
                                     )}
                                 </div>
                             ) : (
-                                <div className="marks-entry-table">
-                                    <table>
-                                        <thead>
-                                            <tr>
-                                                <th>Student Name</th>
-                                                <th>Username</th>
-                                                <th>Obtained Marks</th>
-                                                <th>Grade (Auto)</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {students.map(student => {
-                                                const currentMark = studentMarks[student.id] || '';
-                                                return (
-                                                    <tr key={student.id}>
-                                                        <td>{student.name}</td>
-                                                        <td>{student.username}</td>
-                                                        <td>
-                                                            <input
-                                                                type="number"
-                                                                max={selectedAssessment.totalMarks}
-                                                                value={currentMark}
-                                                                onChange={(e) => handleMarkChange(student.id, e.target.value)}
-                                                                placeholder={`Max ${selectedAssessment.totalMarks}`}
-                                                            />
-                                                        </td>
-                                                        <td>
-                                                            <span className={`grade-tag ${calculatePreviewGrade(currentMark, selectedAssessment.totalMarks).toLowerCase()}`}>
-                                                                {calculatePreviewGrade(currentMark, selectedAssessment.totalMarks)}
-                                                            </span>
-                                                        </td>
-                                                        <td>
-                                                            <button
-                                                                className="save-mark-btn"
-                                                                onClick={() => saveStudentMark(student)}
-                                                                disabled={!currentMark}
-                                                            >
-                                                                Save
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+                                <div className="marks-entry-container">
+                                    <div className="csv-upload-section">
+                                        <div className="bulk-upload-tip">
+                                            <FileText size={16} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+                                            <strong>Bulk Upload:</strong> Prefer automation? Upload a CSV file with student marks.
+                                            <span className="template-link" onClick={downloadTemplate} style={{ marginLeft: '10px' }}>
+                                                <Download size={14} style={{ verticalAlign: 'middle' }} /> Download Template
+                                            </span>
+                                        </div>
+                                        <div className="upload-actions">
+                                            <label htmlFor="csv-upload" className="csv-label">
+                                                {uploadFile ? uploadFile.name : 'Choose CSV File'}
+                                            </label>
+                                            <input
+                                                id="csv-upload"
+                                                type="file"
+                                                accept=".csv"
+                                                className="csv-input"
+                                                onChange={handleFileChange}
+                                            />
+                                            <button
+                                                className="upload-btn"
+                                                onClick={handleBulkUpload}
+                                                disabled={!uploadFile || uploading}
+                                            >
+                                                {uploading ? 'Uploading...' : 'Upload & Notify'}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="marks-entry-table">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Student Name</th>
+                                                    <th>Username</th>
+                                                    <th>Obtained Marks</th>
+                                                    <th>Grade (Auto)</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {students.map(student => {
+                                                    const currentMark = studentMarks[student.id] || '';
+                                                    return (
+                                                        <tr key={student.id}>
+                                                            <td>{student.name}</td>
+                                                            <td>{student.username}</td>
+                                                            <td>
+                                                                <input
+                                                                    type="number"
+                                                                    max={selectedAssessment.totalMarks}
+                                                                    value={currentMark}
+                                                                    onChange={(e) => handleMarkChange(student.id, e.target.value)}
+                                                                    placeholder={`Max ${selectedAssessment.totalMarks}`}
+                                                                />
+                                                            </td>
+                                                            <td>
+                                                                <span className={`grade-tag ${calculatePreviewGrade(currentMark, selectedAssessment.totalMarks).toLowerCase()}`}>
+                                                                    {calculatePreviewGrade(currentMark, selectedAssessment.totalMarks)}
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                <button
+                                                                    className="save-mark-btn"
+                                                                    onClick={() => saveStudentMark(student)}
+                                                                    disabled={!currentMark}
+                                                                >
+                                                                    Save
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             )}
                         </div>

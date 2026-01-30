@@ -11,7 +11,10 @@ import {
     Pencil,
     Trash2,
     Plus,
-    Calendar
+    Calendar,
+    Upload,
+    FileText,
+    Download
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import './AdminDashboard.css';
@@ -25,6 +28,8 @@ const AdminDashboard = () => {
     const [students, setStudents] = useState([]);
     const [subjectStudents, setSubjectStudents] = useState([]);
     const [selectedSubjectId, setSelectedSubjectId] = useState('');
+    const [uploadFile, setUploadFile] = useState(null);
+    const [uploading, setUploading] = useState(false);
 
     // User Modal state
     const [showUserModal, setShowUserModal] = useState(false);
@@ -80,8 +85,9 @@ const AdminDashboard = () => {
         localStorage.setItem('systemActivities', JSON.stringify(updatedActivities));
     };
 
-    const API_URL = 'http://localhost:8085/api/users';
-    const SUBJECT_API_URL = 'http://localhost:8085/api/subjects';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8085';
+    const API_URL = `${baseUrl}/api/users`;
+    const SUBJECT_API_URL = `${baseUrl}/api/subjects`;
 
     useEffect(() => {
         fetchUsers();
@@ -162,7 +168,7 @@ const AdminDashboard = () => {
                 alert('User saved successfully!');
                 setShowUserModal(false);
                 setEditingUser(null);
-                setUserFormData({ name: '', role: 'Student', department: '-', email: '', parentsEmail: '', username: '', password: '' });
+                setUserFormData({ name: '', role: 'Student', department: '-', email: '', parentsEmail: '', parentsMobile: '', username: '', password: '' });
                 fetchUsers();
                 addActivity(
                     editingUser ? 'User Updated' : 'New User Created',
@@ -271,6 +277,102 @@ const AdminDashboard = () => {
         }
     };
 
+    const handleFileChange = (e) => {
+        setUploadFile(e.target.files[0]);
+    };
+
+    const handleUserBulkUpload = async () => {
+        if (!uploadFile) {
+            alert('Please select a CSV file first.');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', uploadFile);
+
+        setUploading(true);
+        try {
+            const response = await fetch(`${API_URL}/bulk-upload`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+            if (response.ok && result.success) {
+                alert(`Bulk upload successful!\nSuccess: ${result.successCount}\nFailures: ${result.failureCount}`);
+                setUploadFile(null);
+                fetchUsers();
+                addActivity('Bulk User Upload', `Imported ${result.successCount} users from CSV`, 'success');
+            } else {
+                alert('Upload failed: ' + (result.message || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error during bulk upload:', error);
+            alert('Error during bulk upload: ' + error.message);
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const handleEnrollBulkUpload = async () => {
+        if (!uploadFile || !selectedSubjectId) {
+            alert('Please select a CSV file and a subject.');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', uploadFile);
+
+        setUploading(true);
+        try {
+            const response = await fetch(`${SUBJECT_API_URL}/${selectedSubjectId}/enroll-bulk`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+            if (response.ok && result.success) {
+                alert(`Bulk enrollment successful!\nSuccess: ${result.successCount}\nFailures: ${result.failureCount}`);
+                setUploadFile(null);
+                fetchSubjectStudents(selectedSubjectId);
+                addActivity('Bulk Student Enrollment', `Enrolled ${result.successCount} students in subject`, 'success');
+            } else {
+                alert('Upload failed: ' + (result.message || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error during bulk enrollment:', error);
+            alert('Error during bulk enrollment: ' + error.message);
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const downloadUserTemplate = () => {
+        const headers = "name,role,department,email,parentsEmail,parentsMobile,username,password";
+        const sampleData = "John Doe,Student,Science,john@example.com,parent@example.com,9876543210,johndoe,pass123";
+        const csvContent = "data:text/csv;charset=utf-8," + headers + "\n" + sampleData;
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "user_template.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const downloadEnrollTemplate = () => {
+        const headers = "username";
+        const sampleData = "johndoe\njanedoe";
+        const csvContent = "data:text/csv;charset=utf-8," + headers + "\n" + sampleData;
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "enrollment_template.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const handleDeleteSubject = async (id) => {
         if (window.confirm('Are you sure you want to delete this subject?')) {
             try {
@@ -286,7 +388,7 @@ const AdminDashboard = () => {
 
     const openAddUserModal = () => {
         setEditingUser(null);
-        setUserFormData({ name: '', role: 'Student', department: '-', email: '', parentsEmail: '', username: '', password: '' });
+        setUserFormData({ name: '', role: 'Student', department: '-', email: '', parentsEmail: '', parentsMobile: '', username: '', password: '' });
         setShowUserModal(true);
     };
 
@@ -298,6 +400,7 @@ const AdminDashboard = () => {
             department: user.department,
             email: user.email,
             parentsEmail: user.parentsEmail || '',
+            parentsMobile: user.parentsMobile || '',
             username: user.username,
             password: ''
         });
@@ -502,10 +605,34 @@ const AdminDashboard = () => {
             <section className="table-section card-glass">
                 <div className="table-header">
                     <h2>User List</h2>
-                    <button className="btn-add" onClick={openAddUserModal}>
-                        <Plus size={18} />
-                        Add New User
-                    </button>
+                    <div className="header-actions">
+                        <div className="bulk-actions-inline">
+                            <span className="template-link" onClick={downloadUserTemplate}>
+                                <Download size={14} /> Template
+                            </span>
+                            <label htmlFor="user-bulk-upload" className="csv-label-mini">
+                                {uploadFile ? uploadFile.name : 'Bulk CSV'}
+                            </label>
+                            <input
+                                id="user-bulk-upload"
+                                type="file"
+                                accept=".csv"
+                                onChange={handleFileChange}
+                                style={{ display: 'none' }}
+                            />
+                            <button
+                                className="btn-upload-mini"
+                                onClick={handleUserBulkUpload}
+                                disabled={!uploadFile || uploading}
+                            >
+                                <Upload size={14} /> {uploading ? '...' : 'Import'}
+                            </button>
+                        </div>
+                        <button className="btn-add" onClick={openAddUserModal}>
+                            <Plus size={18} />
+                            Add User
+                        </button>
+                    </div>
                 </div>
 
                 <div className="table-container">
@@ -517,6 +644,8 @@ const AdminDashboard = () => {
                                 <th>Role</th>
                                 <th>Department</th>
                                 <th>Email</th>
+                                <th>Parents Email</th>
+                                <th>Parents Mobile</th>
                                 <th>Username</th>
                                 <th>Action</th>
                             </tr>
@@ -529,6 +658,8 @@ const AdminDashboard = () => {
                                     <td><span className={`role-badge ${user.role.toLowerCase()}`}>{user.role}</span></td>
                                     <td>{user.department || '-'}</td>
                                     <td>{user.email}</td>
+                                    <td>{user.parentsEmail || '-'}</td>
+                                    <td>{user.parentsMobile || '-'}</td>
                                     <td>{user.username}</td>
                                     <td className="actions">
                                         <button className="edit-btn" onClick={() => openEditUserModal(user)}>
@@ -609,19 +740,46 @@ const AdminDashboard = () => {
 
             <div className="enrollment-management card-glass">
                 <div className="selector-section">
-                    <label>Select Subject to Manage:</label>
-                    <select
-                        value={selectedSubjectId}
-                        onChange={(e) => setSelectedSubjectId(e.target.value)}
-                        className="subject-selector"
-                    >
-                        <option value="">-- Select a Subject --</option>
-                        {subjects.map(subject => (
-                            <option key={subject.id} value={subject.id}>
-                                {subject.name} ({subject.code}) - {subject.faculty ? subject.faculty.name : 'No Faculty'}
-                            </option>
-                        ))}
-                    </select>
+                    <div className="selector-info">
+                        <label>Select Subject to Manage:</label>
+                        <select
+                            value={selectedSubjectId}
+                            onChange={(e) => setSelectedSubjectId(e.target.value)}
+                            className="subject-selector"
+                        >
+                            <option value="">-- Select a Subject --</option>
+                            {subjects.map(subject => (
+                                <option key={subject.id} value={subject.id}>
+                                    {subject.name} ({subject.code}) - {subject.faculty ? subject.faculty.name : 'No Faculty'}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {selectedSubjectId && (
+                        <div className="bulk-actions-inline enrollment-bulk">
+                            <span className="template-link" onClick={downloadEnrollTemplate}>
+                                <Download size={14} /> Template
+                            </span>
+                            <label htmlFor="enroll-bulk-upload" className="csv-label-mini">
+                                {uploadFile ? uploadFile.name : 'Bulk Enroll Students'}
+                            </label>
+                            <input
+                                id="enroll-bulk-upload"
+                                type="file"
+                                accept=".csv"
+                                onChange={handleFileChange}
+                                style={{ display: 'none' }}
+                            />
+                            <button
+                                className="btn-upload-mini"
+                                onClick={handleEnrollBulkUpload}
+                                disabled={!uploadFile || uploading}
+                            >
+                                <Upload size={14} /> {uploading ? '...' : 'Enroll'}
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {selectedSubjectId && (
@@ -819,6 +977,18 @@ const AdminDashboard = () => {
                                             value={userFormData.parentsEmail}
                                             onChange={handleUserInputChange}
                                             placeholder="Enter parent's email"
+                                        />
+                                    </div>
+                                )}
+                                {userFormData.role === 'Student' && (
+                                    <div className="form-group">
+                                        <label>Parents Mobile</label>
+                                        <input
+                                            type="text"
+                                            name="parentsMobile"
+                                            value={userFormData.parentsMobile}
+                                            onChange={handleUserInputChange}
+                                            placeholder="Enter parent's mobile"
                                         />
                                     </div>
                                 )}

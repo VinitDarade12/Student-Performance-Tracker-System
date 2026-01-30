@@ -18,6 +18,7 @@ import './StudentDashboard.css';
 
 const StudentDashboard = () => {
     const navigate = useNavigate();
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8085';
     const [user, setUser] = useState(null);
     const [marks, setMarks] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -37,7 +38,8 @@ const StudentDashboard = () => {
     const [profileForm, setProfileForm] = useState({
         name: '',
         email: '',
-        parentsEmail: ''
+        parentsEmail: '',
+        parentsMobile: ''
     });
     const [profileStatus, setProfileStatus] = useState({ type: '', message: '' });
 
@@ -49,7 +51,8 @@ const StudentDashboard = () => {
             setProfileForm({
                 name: storedUser.name || '',
                 email: storedUser.email || '',
-                parentsEmail: storedUser.parentsEmail || ''
+                parentsEmail: storedUser.parentsEmail || '',
+                parentsMobile: storedUser.parentsMobile || ''
             });
         }
     }, []);
@@ -62,7 +65,7 @@ const StudentDashboard = () => {
 
     const fetchMarks = async (studentId) => {
         try {
-            const response = await fetch(`http://localhost:8085/api/marks/student/${studentId}`);
+            const response = await fetch(`${baseUrl}/api/marks/student/${studentId}`);
             if (response.ok) {
                 const data = await response.json();
                 setMarks(data);
@@ -77,7 +80,7 @@ const StudentDashboard = () => {
 
     const fetchEnrolledSubjects = async (studentId) => {
         try {
-            const response = await fetch(`http://localhost:8085/api/subjects/student/${studentId}`);
+            const response = await fetch(`${baseUrl}/api/subjects/student/${studentId}`);
             if (response.ok) {
                 const data = await response.json();
                 setEnrolledSubjects(data);
@@ -89,7 +92,7 @@ const StudentDashboard = () => {
 
     const fetchSubjectAssessments = async (subjectId) => {
         try {
-            const response = await fetch(`http://localhost:8085/api/assessments/subject/${subjectId}`);
+            const response = await fetch(`${baseUrl}/api/assessments/subject/${subjectId}`);
             if (response.ok) {
                 const data = await response.json();
                 setSubjectAssessments(data);
@@ -105,7 +108,7 @@ const StudentDashboard = () => {
         setProfileStatus({ type: '', message: '' });
 
         try {
-            const response = await fetch(`http://localhost:8085/api/users/${user.id}`, {
+            const response = await fetch(`${baseUrl}/api/users/${user.id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -114,7 +117,8 @@ const StudentDashboard = () => {
                     ...user,
                     name: profileForm.name,
                     email: profileForm.email,
-                    parentsEmail: profileForm.parentsEmail
+                    parentsEmail: profileForm.parentsEmail,
+                    parentsMobile: profileForm.parentsMobile
                 }),
             });
 
@@ -437,6 +441,16 @@ const StudentDashboard = () => {
                                     placeholder="Enter parent's email for notifications"
                                 />
                             </div>
+                            <div className="form-group">
+                                <label>Parent's Mobile</label>
+                                <input
+                                    type="text"
+                                    value={profileForm.parentsMobile}
+                                    onChange={(e) => setProfileForm({ ...profileForm, parentsMobile: e.target.value })}
+                                    disabled={!editMode}
+                                    placeholder="Enter parent's mobile for SMS"
+                                />
+                            </div>
 
                             {editMode && (
                                 <div className="form-actions">
@@ -445,7 +459,8 @@ const StudentDashboard = () => {
                                         setProfileForm({
                                             name: user.name,
                                             email: user.email,
-                                            parentsEmail: user.parentsEmail
+                                            parentsEmail: user.parentsEmail,
+                                            parentsMobile: user.parentsMobile
                                         });
                                     }}>
                                         Cancel

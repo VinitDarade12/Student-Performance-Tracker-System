@@ -29,6 +29,9 @@ public class MarkService {
     @Autowired
     private EmailService emailService;
 
+    @Autowired
+    private SMSService smsService;
+
     /**
      * Business Logic for Grading (Requirement):
      * ≥75 → Grade A
@@ -149,18 +152,51 @@ public class MarkService {
 
             // Send to Student
             if (student.getEmail() != null && !student.getEmail().isEmpty()) {
+                System.out.println("Sending student email to: " + student.getEmail());
                 emailService.sendEmail(student.getEmail(), subject, messageBody);
             }
 
-            // Send to Parent (if available)
-            if (student.getParentsEmail() != null && !student.getParentsEmail().isEmpty()) {
-                String parentBody = "Dear Parent,\n\nThis is an update regarding your child "
-                        + messageBody.substring(5); // Reuse body, skip "Dear Name"
+            // Send to Parent (if available and different from student email)
+            if (student.getParentsEmail() != null && !student.getParentsEmail().isEmpty()
+                    && !student.getParentsEmail().equalsIgnoreCase(student.getEmail())) {
+                System.out.println("Sending parent email to: " + student.getParentsEmail());
+                String parentBody = String.format(
+                        "Dear Parent,\n\n" +
+                                "This is an update regarding your child %s's performance.\n\n" +
+                                "Assessment: %s (%s)\n" +
+                                "Score: %.1f / %.1f\n" +
+                                "Grade: %s\n" +
+                                "Performance Trend: %s\n\n",
+                        student.getName(), assessmentName, subjectName, obtained, total, grade, trend);
+
+                if ("Improved".equalsIgnoreCase(trend)) {
+                    parentBody += "Your child's performance has improved. Keep encouraging them!\n";
+                } else if ("Declined".equalsIgnoreCase(trend)) {
+                    parentBody += "There has been a slight decline in performance. A little extra focus might help.\n";
+                }
+
+                parentBody += "\nBest Regards,\nStudent Performance Tracker System";
                 emailService.sendEmail(student.getParentsEmail(), subject, parentBody);
+            }
+
+            // Send SMS to Parent (if available)
+            String parentMobile = student.getParentsMobile();
+            System.out.println("Processing SMS check for student: " + student.getName() + ", Parent Mobile: ["
+                    + parentMobile + "]");
+
+            if (parentMobile != null && !parentMobile.trim().isEmpty()) {
+                System.out.println("Triggering SMSService for: " + parentMobile);
+                String smsContent = String.format(
+                        "Tracker Alert: %s scored %.1f/%.1f in %s. Grade: %s. Trend: %s.",
+                        student.getName(), obtained, total, assessmentName, grade, trend);
+                smsService.sendSMS(parentMobile, smsContent);
+            } else {
+                System.out.println("No parent mobile found for student: " + student.getName());
             }
 
         } catch (Exception e) {
             System.err.println("Failed to send email: " + e.getMessage());
+            e.printStackTrace(); // Added stack trace for better debugging
         }
     }
 

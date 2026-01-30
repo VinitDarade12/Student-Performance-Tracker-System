@@ -5,7 +5,15 @@ import com.schooltracker.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import org.springframework.web.multipart.MultipartFile;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.List;
 
 @RestController
@@ -60,8 +68,9 @@ public class UserController {
         user.setDepartment(userDetails.getDepartment());
         user.setEmail(userDetails.getEmail());
         user.setUsername(userDetails.getUsername());
+        user.setParentsEmail(userDetails.getParentsEmail());
+        user.setParentsMobile(userDetails.getParentsMobile());
 
-        // Only update password if provided
         if (userDetails.getPassword() != null && !userDetails.getPassword().isEmpty()) {
             user.setPassword(userDetails.getPassword());
         }
@@ -98,5 +107,51 @@ public class UserController {
 
         userRepository.delete(user);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/bulk-upload")
+    public ResponseEntity<Map<String, Object>> bulkUpload(@RequestParam("file") MultipartFile file) {
+        Map<String, Object> response = new HashMap<>();
+        int successCount = 0;
+        int failureCount = 0;
+        List<String> errors = new ArrayList<>();
+
+        try (BufferedReader fileReader = new BufferedReader(new InputStreamReader(file.getInputStream(), "UTF-8"));
+                CSVParser csvParser = new CSVParser(fileReader,
+                        CSVFormat.DEFAULT.withFirstRecordAsHeader().withIgnoreHeaderCase().withTrim())) {
+
+            Iterable<CSVRecord> csvRecords = csvParser.getRecords();
+
+            for (CSVRecord csvRecord : csvRecords) {
+                try {
+                    User user = new User();
+                    user.setName(csvRecord.get("name"));
+                    user.setRole(csvRecord.get("role"));
+                    user.setDepartment(csvRecord.get("department"));
+                    user.setEmail(csvRecord.get("email"));
+                    user.setParentsEmail(csvRecord.get("parentsEmail"));
+                    user.setParentsMobile(csvRecord.get("parentsMobile"));
+                    user.setUsername(csvRecord.get("username"));
+                    user.setPassword(csvRecord.get("password"));
+
+                    userRepository.save(user);
+                    successCount++;
+                } catch (Exception e) {
+                    errors.add("Error processing row " + csvRecord.getRecordNumber() + ": " + e.getMessage());
+                    failureCount++;
+                }
+            }
+
+            response.put("success", true);
+            response.put("successCount", successCount);
+            response.put("failureCount", failureCount);
+            response.put("errors", errors);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Failed to parse CSV file: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 }

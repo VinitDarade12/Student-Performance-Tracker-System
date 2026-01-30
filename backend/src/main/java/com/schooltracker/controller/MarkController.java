@@ -7,6 +7,15 @@ import com.schooltracker.service.MarkService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 
 import java.util.List;
 
@@ -40,5 +49,65 @@ public class MarkController {
         if (faculty == null)
             return ResponseEntity.notFound().build();
         return ResponseEntity.ok(markService.getMarksByFaculty(faculty));
+    }
+
+    @PostMapping("/bulk-upload")
+    public ResponseEntity<Map<String, Object>> bulkUpload(@RequestParam("file") MultipartFile file,
+            @RequestParam("assessmentId") Long assessmentId,
+            @RequestParam("subjectId") Long subjectId) {
+        Map<String, Object> response = new HashMap<>();
+        int successCount = 0;
+        int failureCount = 0;
+        List<String> errors = new ArrayList<>();
+
+        try (BufferedReader fileReader = new BufferedReader(new InputStreamReader(file.getInputStream(), "UTF-8"));
+                CSVParser csvParser = new CSVParser(fileReader,
+                        CSVFormat.DEFAULT.withFirstRecordAsHeader().withIgnoreHeaderCase().withTrim())) {
+
+            Iterable<CSVRecord> csvRecords = csvParser.getRecords();
+
+            for (CSVRecord csvRecord : csvRecords) {
+                try {
+                    String username = csvRecord.get("username");
+                    Double obtainedMarks = Double.parseDouble(csvRecord.get("obtainedMarks"));
+
+                    User student = userRepository.findByUsername(username).orElse(null);
+                    if (student == null) {
+                        errors.add("Student not found for username: " + username);
+                        failureCount++;
+                        continue;
+                    }
+
+                    Mark mark = new Mark();
+                    mark.setObtainedMarks(obtainedMarks);
+                    mark.setStudent(student);
+
+                    com.schooltracker.model.Subject subject = new com.schooltracker.model.Subject();
+                    subject.setId(subjectId);
+                    mark.setSubject(subject);
+
+                    com.schooltracker.model.Assessment assessment = new com.schooltracker.model.Assessment();
+                    assessment.setId(assessmentId);
+                    mark.setAssessment(assessment);
+
+                    markService.saveMark(mark);
+                    successCount++;
+                } catch (Exception e) {
+                    errors.add("Error processing row " + csvRecord.getRecordNumber() + ": " + e.getMessage());
+                    failureCount++;
+                }
+            }
+
+            response.put("success", true);
+            response.put("successCount", successCount);
+            response.put("failureCount", failureCount);
+            response.put("errors", errors);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Failed to parse CSV file: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 }

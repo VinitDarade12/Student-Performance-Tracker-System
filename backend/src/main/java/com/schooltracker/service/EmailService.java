@@ -11,9 +11,12 @@ public class EmailService {
     @Autowired
     private JavaMailSender mailSender;
 
+    @org.springframework.beans.factory.annotation.Value("${spring.mail.username}")
+    private String fromEmail;
+
     public void sendEmail(String to, String subject, String body) {
         SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom("schooltracker.system@gmail.com"); // Replaced by properties usually, but setting default here
+        message.setFrom(fromEmail);
         message.setTo(to);
         message.setSubject(subject);
         message.setText(body);

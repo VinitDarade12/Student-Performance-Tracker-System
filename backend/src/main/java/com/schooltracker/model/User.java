@@ -22,5 +22,5 @@ public class User {
     private String username;
     private String password;
     private String parentsEmail; // Parent's email for student role
-
+    private String parentsMobile; // Parent's mobile for SMS
 }

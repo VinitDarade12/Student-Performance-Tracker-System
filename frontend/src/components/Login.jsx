@@ -22,7 +22,8 @@ const Login = () => {
         setError('');
 
         try {
-            const response = await fetch('http://localhost:8085/api/auth/login', {
+            const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8085';
+            const response = await fetch(`${baseUrl}/api/auth/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
