@@ -16,10 +16,12 @@ const Login = () => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
 
     const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
+        setLoading(true);
 
         try {
             const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8085';
@@ -49,7 +51,10 @@ const Login = () => {
                 setError(message);
             }
         } catch (err) {
-            setError('Server connection failed. Please ensure the backend is running.');
+            console.error('Login error:', err);
+            setError('Server connection failed. Your backend might be waking up (Render takes ~1 min) or the API URL is incorrect.');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -104,8 +109,8 @@ const Login = () => {
                             />
                         </div>
 
-                        <button type="submit" className="login-submit">
-                            Sign In as {role}
+                        <button type="submit" className="login-submit" disabled={loading}>
+                            {loading ? 'Connecting...' : `Sign In as ${role}`}
                         </button>
                     </form>
 
